@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SIEM Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🚨 Real-Time SIEM Dashboard</h1>
+    <p>Total Alerts Detected: <span id="total_alerts" class="alert-count">0</span></p>
+
+    <div class="charts">
+      <div class="chart-box">
+        <h3>Top Attacker IPs</h3>
+        <canvas id="ipChart" width="600" height="400"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Alerts by Severity</h3>
+        <canvas id="severityChart" width="400" height="400"></canvas>
+      </div>
+    </div>
+
+    <h2>🧾 Latest 15 Alerts</h2>
+    <table id="alertsTable">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Source IP</th>
+          <th>Destination IP</th>
+          <th>Severity</th>
+          <th>Signature</th>
+        </tr>
+      </thead>
+      <tbody id="alertsBody">
+      </tbody>
+    </table>
+  </div>
+  <button onclick="alertAudio.play()">Enable Siren</button>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
