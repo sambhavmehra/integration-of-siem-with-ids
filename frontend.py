@@ -31,10 +31,82 @@ SIREN_DURATION = 5  # Duration in seconds to play the siren
 # Initialize the sound system
 pygame.mixer.init()
 
+# Function to get all network interfaces and their IPs
+def get_network_ips():
+    network_ips = []
+    try:
+        # For Unix/Linux/MacOS
+        hostname = socket.gethostname()
+        # Get all addresses for the hostname
+        addresses = socket.getaddrinfo(hostname, None)
+        
+        for addr in addresses:
+            ip = addr[4][0]
+            # Filter out IPv6 and loopback addresses
+            if '.' in ip and ip != '127.0.0.1':
+                network_ips.append(ip)
+                
+        # If no IPs found, try alternative method for Linux
+        if not network_ips:
+            try:
+                import netifaces
+                for interface in netifaces.interfaces():
+                    # Skip loopback interface
+                    if interface == 'lo':
+                        continue
+                    # Get addresses for this interface
+                    addrs = netifaces.ifaddresses(interface)
+                    # Get IPv4 addresses
+                    if netifaces.AF_INET in addrs:
+                        for addr in addrs[netifaces.AF_INET]:
+                            ip = addr['addr']
+                            if ip != '127.0.0.1': 
+                                network_ips.append(ip)
+            except ImportError:
+                # If netifaces not available, try command line tool
+                try:
+                    import subprocess
+                    result = subprocess.check_output(['hostname', '-I']).decode('utf-8').strip()
+                    if result:
+                        network_ips = result.split()
+                except:
+                    pass
+    except Exception as e:
+        st.error(f"Error getting network IPs: {e}")
+        
+    return network_ips
+
+# Auto-whitelist internal IPs of the current system
+# Constants
+MANUAL_WHITELIST_FILE = "manual_whitelisted_ips.json"
+
+# Auto-whitelist internal IPs of the current system
+AUTO_WHITELISTED_IPS = get_network_ips()
+
+# Load manually added IPs from file
+def load_manual_whitelist():
+    if os.path.exists(MANUAL_WHITELIST_FILE):
+        try:
+            with open(MANUAL_WHITELIST_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+# Save manually added IPs to file
+def save_manual_whitelist(whitelist):
+    with open(MANUAL_WHITELIST_FILE, 'w') as f:
+        json.dump(whitelist, f)
+
+# Load and combine whitelists
+MANUAL_WHITELISTED_IPS = load_manual_whitelist()
+WHITELISTED_IPS = list(set(AUTO_WHITELISTED_IPS + MANUAL_WHITELISTED_IPS))  # ✅ Now this is only a list
+
+
 # Page configuration
 st.set_page_config(
-    page_title="Network SIEM Dashboard",
-    page_icon="🛡",
+    page_title=" SIEM & IDS Dashboard",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -157,62 +229,68 @@ def load_logs():
     return logs
 
 def block_ip(ip_address, reason):
+    # Whitelist check (auto + manual)
+    if ip_address in WHITELISTED_IPS:
+        st.warning(f"⚠️ Skipping block. IP {ip_address} is in the whitelist.")
+        return
+
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.blocked_ips[ip_address] = {
         "timestamp": timestamp,
         "reason": reason
     }
-    
+
     # Save to file
     with open(BLOCKED_IPS_FILE, 'w') as f:
         json.dump(st.session_state.blocked_ips, f)
-    
-    # Check if we're running on Windows or Linux
+
+    # Apply firewall rules based on OS
     if os.name == 'nt':  # Windows
         try:
-            # For Windows, use netsh to block the IP
             if "Unsecured HTTP" in reason:
-                # Block just HTTP traffic on port 80 for unsecured HTTP
-                subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 
-                               f'name=SIEM_Block_HTTP_{ip_address}', 'dir=in', 
-                               'action=block', f'remoteip={ip_address}', 
-                               'protocol=TCP', 'localport=80'], 
-                               shell=True, check=True)
-                st.success(f"IP {ip_address} has been blocked for HTTP traffic and added to Windows firewall rules")
+                subprocess.run([
+                    'netsh', 'advfirewall', 'firewall', 'add', 'rule',
+                    f'name=SIEM_Block_HTTP_{ip_address}', 'dir=in',
+                    'action=block', f'remoteip={ip_address}',
+                    'protocol=TCP', 'localport=80'
+                ], shell=True, check=True)
+                st.success(f"✅ IP {ip_address} blocked for HTTP (port 80) in Windows firewall.")
             else:
-                # For other reasons, block all traffic
-                subprocess.run(['netsh', 'advfirewall', 'firewall', 'add', 'rule', 
-                               f'name=SIEM_Block_{ip_address}', 'dir=in', 
-                               'action=block', f'remoteip={ip_address}'], 
-                               shell=True, check=True)
-                st.success(f"IP {ip_address} has been completely blocked and added to Windows firewall rules")
-            
-            # Send Telegram notification about blocked IP
+                subprocess.run([
+                    'netsh', 'advfirewall', 'firewall', 'add', 'rule',
+                    f'name=SIEM_Block_{ip_address}', 'dir=in',
+                    'action=block', f'remoteip={ip_address}'
+                ], shell=True, check=True)
+                st.success(f"✅ IP {ip_address} fully blocked in Windows firewall.")
+
             send_telegram_alert(ip_address, "BLOCKED", timestamp, reason)
-            
-            # Play siren when an IP is blocked
             play_siren()
+
         except Exception as e:
-            st.error(f"Failed to add firewall rule: {e}")
+            st.error(f"❌ Failed to add firewall rule: {e}")
+
     else:  # Linux
         try:
-            # For Linux systems, keep the original logic
             if "Unsecured HTTP" in reason:
-                # Block just HTTP traffic on port 80
-                subprocess.run(['sudo', 'iptables', '-A', 'INPUT', '-s', ip_address, '-p', 'tcp', '--dport', '80', '-j', 'DROP'])
-                st.success(f"IP {ip_address} has been blocked for HTTP traffic and added to firewall rules")
+                subprocess.run([
+                    'sudo', 'iptables', '-A', 'INPUT', '-s', ip_address,
+                    '-p', 'tcp', '--dport', '80', '-j', 'DROP'
+                ])
+                st.success(f"✅ IP {ip_address} blocked for HTTP on Linux.")
             else:
-                # Block all traffic
-                subprocess.run(['sudo', 'iptables', '-A', 'INPUT', '-s', ip_address, '-j', 'DROP'])
-                st.success(f"IP {ip_address} has been completely blocked and added to firewall rules")
-            
-            # Send Telegram notification about blocked IP
+                subprocess.run([
+                    'sudo', 'iptables', '-A', 'INPUT', '-s', ip_address,
+                    '-j', 'DROP'
+                ])
+                st.success(f"✅ IP {ip_address} fully blocked on Linux.")
+
             send_telegram_alert(ip_address, "BLOCKED", timestamp, reason)
-            
-            # Play siren when an IP is blocked
             play_siren()
+
         except Exception as e:
-            st.error(f"Failed to add firewall rule: {e}")
+            st.error(f"❌ Failed to add firewall rule: {e}")
+
+
 
 def unblock_ip(ip_address):
     if ip_address in st.session_state.blocked_ips:
@@ -304,50 +382,6 @@ def geolocate_ip(ip):
         "org": "Unknown"
     }
 
-# Function to get all network interfaces and their IPs
-def get_network_ips():
-    network_ips = []
-    try:
-        # For Unix/Linux/MacOS
-        hostname = socket.gethostname()
-        # Get all addresses for the hostname
-        addresses = socket.getaddrinfo(hostname, None)
-        
-        for addr in addresses:
-            ip = addr[4][0]
-            # Filter out IPv6 and loopback addresses
-            if '.' in ip and ip != '127.0.0.1':
-                network_ips.append(ip)
-                
-        # If no IPs found, try alternative method for Linux
-        if not network_ips:
-            try:
-                import netifaces
-                for interface in netifaces.interfaces():
-                    # Skip loopback interface
-                    if interface == 'lo':
-                        continue
-                    # Get addresses for this interface
-                    addrs = netifaces.ifaddresses(interface)
-                    # Get IPv4 addresses
-                    if netifaces.AF_INET in addrs:
-                        for addr in addrs[netifaces.AF_INET]:
-                            ip = addr['addr']
-                            if ip != '127.0.0.1': 
-                                network_ips.append(ip)
-            except ImportError:
-                # If netifaces not available, try command line tool
-                try:
-                    import subprocess
-                    result = subprocess.check_output(['hostname', '-I']).decode('utf-8').strip()
-                    if result:
-                        network_ips = result.split()
-                except:
-                    pass
-    except Exception as e:
-        st.error(f"Error getting network IPs: {e}")
-        
-    return network_ips
 
 # Function to check for new malicious activities and trigger siren
 def check_for_new_malicious_activities(df):
@@ -394,7 +428,7 @@ def check_for_new_malicious_activities(df):
                 st.session_state.processed_alerts = set(list(st.session_state.processed_alerts)[-500:])
 
 # Sidebar
-st.sidebar.title("🛡 SIEM Controls")
+st.sidebar.title("🛡️ SIEM Controls")
 refresh_btn = st.sidebar.button("🔄 Refresh Data")
 
 # Show stop siren button in sidebar if siren is playing
@@ -467,7 +501,7 @@ if page == "Dashboard":
     col_title, col_siren = st.columns([4, 1])
     
     with col_title:
-        st.title("🛡 Network Security Monitoring Dashboard")
+        st.title("🛡️ SIEM & IDS Dashboard")
     
     # Show stop siren button if siren is playing
     with col_siren:
@@ -609,7 +643,7 @@ elif page == "Alerts":
         # Alert table
         st.subheader(f"Detected Events ({len(filtered_df)} records)")
         
-        for _, alert in filtered_df.iterrows():
+        for idx, alert in filtered_df.iterrows():
             col1, col2 = st.columns([5, 1])
             
             with col1:
@@ -635,11 +669,13 @@ elif page == "Alerts":
             
             with col2:
                 if not ip_blocked and ("Malicious" in str(alert['detection']) or "Unsecured" in str(alert['detection'])):
-                    if st.button(f"Block IP", key=f"block_{alert['source_ip']}_{alert['timestamp']}"):
+                    if st.button("Block IP", key=f"block_{alert['source_ip']}_{alert['timestamp']}_{idx}"):
                         block_ip(alert['source_ip'], alert['detection'])
+
                 elif ip_blocked:
-                    if st.button(f"Unblock", key=f"unblock_{alert['source_ip']}_{alert['timestamp']}"):
-                        unblock_ip(alert['source_ip'])
+                    if st.button("Unblock", key=f"unblock_{alert['source_ip']}_{alert['timestamp']}_{idx}"):
+                       unblock_ip(alert['source_ip'])
+
     else:
         st.info("No alert data available yet.")
 
@@ -903,6 +939,35 @@ elif page == "Settings":
     if st.button("Test Siren") and st.session_state.siren_enabled:
         play_siren()
     
+    st.subheader("🔐 Whitelisted IPs Management")
+    st.write("### Whitelisted IPs (Auto + Manual)")
+    for ip in WHITELISTED_IPS:
+      st.code(ip)
+    with st.expander("✏️ Manage Manual Whitelist"):
+      col1, col2 = st.columns(2) 
+      with col1: 
+          new_whitelist_ip = st.text_input("Add IP to Manual Whitelist")
+          if st.button("➕ Add to Whitelist"):
+              try:
+                  ipaddress.ip_address(new_whitelist_ip)
+                  if new_whitelist_ip not in MANUAL_WHITELISTED_IPS:
+                      MANUAL_WHITELISTED_IPS.append(new_whitelist_ip)
+                      save_manual_whitelist(MANUAL_WHITELISTED_IPS)
+                      st.success(f"Added {new_whitelist_ip} to manual whitelist.")
+                  else:
+                      st.info("IP already in manual whitelist.")
+              except ValueError:
+                  st.error("Invalid IP address.")
+      with col2:
+          if MANUAL_WHITELISTED_IPS:
+               remove_ip = st.selectbox("Select IP to Remove", MANUAL_WHITELISTED_IPS)
+               if st.button("🗑️ Remove from Whitelist"):
+                   MANUAL_WHITELISTED_IPS.remove(remove_ip)
+                   save_manual_whitelist(MANUAL_WHITELISTED_IPS)
+                   st.success(f"Removed {remove_ip} from manual whitelist.")
+               else:
+                   st.info("No manually whitelisted IPs.")                            
+    
     # Log Settings
     st.subheader("Log Settings")
     
@@ -947,4 +1012,6 @@ elif page == "Settings":
 
 # Footer
 st.markdown("---")
-st.markdown("Network SIEM Dashboard - Monitoring network traffic in real-time")
+st.markdown("Integration IDS with SIEM  Dashboard - Monitoring network traffic in real-time")
+
+

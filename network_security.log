@@ -1,0 +1,5 @@
+2025-05-12 17:33:28,552 - NetworkSecurityPlatform - WARNING - Configuration file not found. Using default settings.
+2025-05-12 17:33:31,750 - NetworkSecurityPlatform - WARNING - Configuration file not found. Using default settings.
+2025-05-12 17:33:33,239 - NetworkSecurityPlatform - WARNING - Configuration file not found. Using default settings.
+2025-05-12 17:33:33,359 - NetworkSecurityPlatform - WARNING - Configuration file not found. Using default settings.
+2025-05-12 17:33:33,557 - NetworkSecurityPlatform - WARNING - Potential threat detected: {'type': 'Port Scan', 'source_ip': '108.121.45.125', 'timestamp': '2025-05-12T17:33:33.557318', 'severity': 'Medium'}
