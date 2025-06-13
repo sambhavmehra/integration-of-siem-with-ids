@@ -940,7 +940,7 @@ elif page == "Settings":
         play_siren()
     
     st.subheader("🔐 Whitelisted IPs Management")
-    st.write("### Whitelisted IPs (Auto + Manual)")
+    st.write("### Whitelisted IPs")
     for ip in WHITELISTED_IPS:
       st.code(ip)
     with st.expander("✏️ Manage Manual Whitelist"):
@@ -978,7 +978,10 @@ elif page == "Settings":
     if st.button("Clear All Logs", help="This will delete all log entries."):
         try:
             # Backup logs first
-            backup_file = f"ids_logs_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            backup_folder = "backup"
+            os.makedirs(backup_folder, exist_ok=True)  # Ensure backup folder exists
+            backup_file = os.path.join(backup_folder, f"ids_logs_backup_{datetime.datetime.now().strftime('%Y-%m-%d_%I-%M-%S_%p')}.json")
+        
             if os.path.exists(LOG_FILE):
                 import shutil
                 shutil.copy(LOG_FILE, backup_file)

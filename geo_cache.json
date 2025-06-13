@@ -1,0 +1,16 @@
+{
+  "8.8.8.8": {
+    "ip": "8.8.8.8",
+    "country": "United States",
+    "country_code": "US",
+    "city": "Ashburn",
+    "region": "Virginia",
+    "latitude": 39.03,
+    "longitude": -77.5,
+    "org": "Google Public DNS",
+    "timezone": "America/New_York",
+    "provider": "ip-api",
+    "success": true,
+    "cached": false
+  }
+}

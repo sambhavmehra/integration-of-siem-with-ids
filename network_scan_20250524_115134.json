@@ -1,0 +1,47 @@
+{
+  "scan_timestamp": "2025-05-24 11:51:13",
+  "network_range": "192.168.223.0/24",
+  "scan_settings": {
+    "timeout": 7,
+    "scan_type": "full",
+    "auto_port_scan": true
+  },
+  "discovered_devices": [
+    {
+      "ip": "192.168.223.16",
+      "mac": "0a:73:51:30:df:b5",
+      "vendor": "Unknown",
+      "status": "Active",
+      "last_seen": "2025-05-24 11:51:12",
+      "response_time": "Fast"
+    },
+    {
+      "ip": "192.168.223.23",
+      "mac": "fc:77:74:f4:7b:c1",
+      "vendor": "Unknown",
+      "status": "Active",
+      "last_seen": "2025-05-24 11:51:12",
+      "response_time": "Fast"
+    }
+  ],
+  "port_scan_results": {
+    "192.168.223.16": {
+      "ip": "192.168.223.16",
+      "status": "up",
+      "os": "Linux 2.6.32 - 3.10",
+      "open_ports": [
+        {
+          "port": 53,
+          "service": "domain",
+          "product": "",
+          "version": "",
+          "state": "open",
+          "description": "DNS - Domain Name Service"
+        }
+      ],
+      "scan_time": "2025-05-24 11:51:32",
+      "scan_type": "full"
+    },
+    "192.168.223.23": null
+  }
+}

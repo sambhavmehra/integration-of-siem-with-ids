@@ -103,7 +103,7 @@ st.markdown(
 st.markdown('<div class="center">', unsafe_allow_html=True)
 
 st.markdown(
-    '<div class="big-title">🛡️Integration <span class="red-text">SIEM with IDS</span><br>Advanced Threat Detection System</div>',
+    '<div class="big-title">🛡️Integration <span class="red-text">SIEM with IDS</span><br>An Advanced Threat Detection System</div>',
     unsafe_allow_html=True
 )
 
